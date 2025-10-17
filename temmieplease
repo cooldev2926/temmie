@@ -1,9 +1,7 @@
-if
-getgenv().LegacyVer = true
+if getgenv().LegacyVer = "true"
 then
 loadstring(game:HttpGet("https://raw.githubusercontent.com/cooldev2926/temmie/refs/heads/main/t3mreal_1-on-yt_temmie-please_heads-pleasescriptlegacy.txt"))()
-elseif
-getgenv().LegacyVer = false
+elseif getgenv().LegacyVer = "false"
 then
 loadstring(game:HttpGet("https://raw.githubusercontent.com/cooldev2926/temmie/refs/heads/main/t3mreal_1-on-yt_temmie-please_heads-pleasescript.txt"))()
 else
