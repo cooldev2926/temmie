@@ -5,4 +5,4 @@ elseif getgenv().LegacyVer = "false"
 then
 loadstring(game:HttpGet("https://raw.githubusercontent.com/cooldev2926/temmie/refs/heads/main/t3mreal_1-on-yt_temmie-please_heads-pleasescript.txt"))()
 else
-kick("non valid LegacyVer, if you dont want legacy ver then put false")
+Player:kick("non valid LegacyVer, if you dont want legacy ver then put false")
