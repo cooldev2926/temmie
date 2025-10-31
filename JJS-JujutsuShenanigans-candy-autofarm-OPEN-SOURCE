@@ -58,6 +58,39 @@ local currentTarget = nil
 local currentPath = nil
 local currentWaypointIndex = 1
 
+-- Function to safely get character
+local function getCharacter()
+    local character = player.Character
+    if character and character:IsDescendantOf(workspace) then
+        return character
+    end
+    return nil
+end
+
+-- Function to safely get HumanoidRootPart
+local function getHumanoidRootPart()
+    local character = getCharacter()
+    if character then
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            return rootPart
+        end
+    end
+    return nil
+end
+
+-- Function to safely get Humanoid
+local function getHumanoid()
+    local character = getCharacter()
+    if character then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            return humanoid
+        end
+    end
+    return nil
+end
+
 -- Function to find HalloweenDoor models with enabled proximity prompts
 local function findHalloweenDoors()
     local doors = {}
@@ -80,13 +113,15 @@ end
 
 -- Function to get the primary part position of a model
 local function getModelPosition(model)
-    if model.PrimaryPart then
-        return model.PrimaryPart.Position
-    else
-        -- Find any base part in the model
-        for _, part in pairs(model:GetDescendants()) do
-            if part:IsA("BasePart") then
-                return part.Position
+    if model and model:IsA("Model") then
+        if model.PrimaryPart then
+            return model.PrimaryPart.Position
+        else
+            -- Find any base part in the model
+            for _, part in pairs(model:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    return part.Position
+                end
             end
         end
     end
@@ -95,9 +130,11 @@ end
 
 -- Function to check if a door's proximity prompt is still enabled
 local function isDoorEnabled(door)
-    for _, child in pairs(door:GetDescendants()) do
-        if child:IsA("ProximityPrompt") and child.Enabled then
-            return true
+    if door and door:IsA("Model") then
+        for _, child in pairs(door:GetDescendants()) do
+            if child:IsA("ProximityPrompt") and child.Enabled then
+                return true
+            end
         end
     end
     return false
@@ -105,12 +142,11 @@ end
 
 -- Function to find the nearest enabled HalloweenDoor
 local function findNearestHalloweenDoor()
-    local character = player.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then
+    local rootPart = getHumanoidRootPart()
+    if not rootPart then
         return nil
     end
     
-    local rootPart = character.HumanoidRootPart
     local doors = findHalloweenDoors()
     local nearestDoor = nil
     local shortestDistance = math.huge
@@ -131,23 +167,24 @@ end
 
 -- Function to instantly interact with proximity prompt
 local function interactWithProximityPrompt(model)
-    for _, child in pairs(model:GetDescendants()) do
-        if child:IsA("ProximityPrompt") and child.Enabled then
-            -- Fire the proximity prompt trigger
-            fireproximityprompt(child)
-            break
+    if model and model:IsA("Model") then
+        for _, child in pairs(model:GetDescendants()) do
+            if child:IsA("ProximityPrompt") and child.Enabled then
+                -- Fire the proximity prompt trigger
+                fireproximityprompt(child)
+                break
+            end
         end
     end
 end
 
 -- Function to compute path to target
 local function computePathToTarget(targetModel)
-    local character = player.Character
-    if not character or not character:FindFirstChild("Humanoid") or not character:FindFirstChild("HumanoidRootPart") then
+    local rootPart = getHumanoidRootPart()
+    if not rootPart then
         return nil
     end
     
-    local rootPart = character.HumanoidRootPart
     local targetPosition = getModelPosition(targetModel)
     
     if not targetPosition then
@@ -173,12 +210,10 @@ end
 
 -- Function to follow path waypoints
 local function followPath(waypoints)
-    local character = player.Character
-    if not character or not character:FindFirstChild("Humanoid") then
+    local humanoid = getHumanoid()
+    if not humanoid then
         return false
     end
-    
-    local humanoid = character.Humanoid
     
     for i = currentWaypointIndex, #waypoints do
         local waypoint = waypoints[i]
@@ -233,8 +268,8 @@ local function togglePathfinding()
         toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
         
         currentConnection = runService.Heartbeat:Connect(function()
-            local character = player.Character
-            if not character or not character:FindFirstChild("HumanoidRootPart") then
+            local rootPart = getHumanoidRootPart()
+            if not rootPart then
                 return
             end
             
@@ -248,7 +283,6 @@ local function togglePathfinding()
                 currentWaypointIndex = 1
             end
             
-            local rootPart = character.HumanoidRootPart
             local targetPosition = getModelPosition(currentTarget)
             
             if targetPosition then
