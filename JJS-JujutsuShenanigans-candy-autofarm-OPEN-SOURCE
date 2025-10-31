@@ -1,0 +1,274 @@
+-- ScreenGui setup
+local player = game.Players.LocalPlayer
+local gui = Instance.new("ScreenGui")
+gui.Name = "HalloweenDoorToggle"
+gui.Parent = player.PlayerGui
+
+-- Main frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "ToggleFrame"
+mainFrame.Size = UDim2.new(0, 120, 0, 60)
+mainFrame.Position = UDim2.new(0, 50, 0, 50)
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.BorderSizePixel = 2
+mainFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = gui
+
+-- Corner rounding
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+-- Toggle button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(0.8, 0, 0.6, 0)
+toggleButton.Position = UDim2.new(0.1, 0, 0.2, 0)
+toggleButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+toggleButton.Text = "OFF"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.TextScaled = true
+toggleButton.Parent = mainFrame
+
+-- Button corner rounding
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 6)
+buttonCorner.Parent = toggleButton
+
+-- Title label
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "Title"
+titleLabel.Size = UDim2.new(1, 0, 0.2, 0)
+titleLabel.Position = UDim2.new(0, 0, 0, -20)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "Halloween Door"
+titleLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+titleLabel.TextScaled = true
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Parent = mainFrame
+
+-- Toggle state and pathfinding
+local isToggled = false
+local pathfindingService = game:GetService("PathfindingService")
+local runService = game:GetService("RunService")
+local currentConnection = nil
+local currentTarget = nil
+local currentPath = nil
+local currentWaypointIndex = 1
+
+-- Function to find HalloweenDoor models with proximity prompts
+local function findHalloweenDoors()
+    local doors = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj.Name == "HalloweenDoor" and obj:IsA("Model") then
+            local hasProximityPrompt = false
+            for _, child in pairs(obj:GetDescendants()) do
+                if child:IsA("ProximityPrompt") then
+                    hasProximityPrompt = true
+                    break
+                end
+            end
+            if hasProximityPrompt then
+                table.insert(doors, obj)
+            end
+        end
+    end
+    return doors
+end
+
+-- Function to get the primary part position of a model
+local function getModelPosition(model)
+    if model.PrimaryPart then
+        return model.PrimaryPart.Position
+    else
+        -- Find any base part in the model
+        for _, part in pairs(model:GetDescendants()) do
+            if part:IsA("BasePart") then
+                return part.Position
+            end
+        end
+    end
+    return nil
+end
+
+-- Function to find the nearest HalloweenDoor
+local function findNearestHalloweenDoor()
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return nil
+    end
+    
+    local rootPart = character.HumanoidRootPart
+    local doors = findHalloweenDoors()
+    local nearestDoor = nil
+    local shortestDistance = math.huge
+    
+    for _, door in pairs(doors) do
+        local doorPosition = getModelPosition(door)
+        if doorPosition then
+            local distance = (rootPart.Position - doorPosition).Magnitude
+            if distance < shortestDistance then
+                shortestDistance = distance
+                nearestDoor = door
+            end
+        end
+    end
+    
+    return nearestDoor
+end
+
+-- Function to instantly interact with proximity prompt
+local function interactWithProximityPrompt(model)
+    for _, child in pairs(model:GetDescendants()) do
+        if child:IsA("ProximityPrompt") then
+            -- Fire the proximity prompt trigger
+            fireproximityprompt(child)
+            break
+        end
+    end
+end
+
+-- Function to compute path to target
+local function computePathToTarget(targetModel)
+    local character = player.Character
+    if not character or not character:FindFirstChild("Humanoid") or not character:FindFirstChild("HumanoidRootPart") then
+        return nil
+    end
+    
+    local rootPart = character.HumanoidRootPart
+    local targetPosition = getModelPosition(targetModel)
+    
+    if not targetPosition then
+        return nil
+    end
+    
+    -- Create path
+    local path = pathfindingService:CreatePath({
+        AgentRadius = 2,
+        AgentHeight = 5,
+        AgentCanJump = true
+    })
+    
+    -- Compute path
+    path:ComputeAsync(rootPart.Position, targetPosition)
+    
+    if path.Status == Enum.PathStatus.Success then
+        return path:GetWaypoints()
+    end
+    
+    return nil
+end
+
+-- Function to follow path waypoints
+local function followPath(waypoints)
+    local character = player.Character
+    if not character or not character:FindFirstChild("Humanoid") then
+        return false
+    end
+    
+    local humanoid = character.Humanoid
+    
+    for i = currentWaypointIndex, #waypoints do
+        local waypoint = waypoints[i]
+        humanoid:MoveTo(waypoint.Position)
+        
+        -- Wait for movement to complete or timeout
+        local moveFinished = false
+        local connection
+        connection = humanoid.MoveToFinished:Connect(function(reached)
+            moveFinished = true
+            connection:Disconnect()
+        end)
+        
+        -- Timeout after 3 seconds to prevent getting stuck
+        local startTime = tick()
+        while not moveFinished and (tick() - startTime) < 3 do
+            runService.Heartbeat:Wait()
+        end
+        
+        if not moveFinished then
+            -- If we timed out, skip to next waypoint
+            currentWaypointIndex = i + 1
+        else
+            currentWaypointIndex = i + 1
+        end
+        
+        -- Check if we should stop (toggle turned off)
+        if not isToggled then
+            return false
+        end
+    end
+    
+    return true
+end
+
+-- Main toggle function
+local function togglePathfinding()
+    if isToggled then
+        -- Stop current pathfinding
+        if currentConnection then
+            currentConnection:Disconnect()
+            currentConnection = nil
+        end
+        currentTarget = nil
+        currentPath = nil
+        currentWaypointIndex = 1
+        toggleButton.Text = "OFF"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    else
+        -- Start pathfinding
+        toggleButton.Text = "ON"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        
+        currentConnection = runService.Heartbeat:Connect(function()
+            local character = player.Character
+            if not character or not character:FindFirstChild("HumanoidRootPart") then
+                return
+            end
+            
+            -- If we don't have a current target or the current target is done, find nearest
+            if not currentTarget then
+                currentTarget = findNearestHalloweenDoor()
+                if not currentTarget then
+                    return -- No doors found
+                end
+                currentPath = computePathToTarget(currentTarget)
+                currentWaypointIndex = 1
+            end
+            
+            local rootPart = character.HumanoidRootPart
+            local targetPosition = getModelPosition(currentTarget)
+            
+            if targetPosition then
+                local distance = (rootPart.Position - targetPosition).Magnitude
+                
+                if distance <= 10 then -- Close enough to interact
+                    interactWithProximityPrompt(currentTarget)
+                    currentTarget = nil
+                    currentPath = nil
+                    currentWaypointIndex = 1
+                else
+                    -- Follow the computed path
+                    if currentPath and currentWaypointIndex <= #currentPath then
+                        followPath(currentPath)
+                    else
+                        -- Recompute path if needed
+                        currentPath = computePathToTarget(currentTarget)
+                        currentWaypointIndex = 1
+                    end
+                end
+            else
+                currentTarget = nil -- Invalid target, find new one
+                currentPath = nil
+                currentWaypointIndex = 1
+            end
+        end)
+    end
+    
+    isToggled = not isToggled
+end
+
+-- Connect toggle button
+toggleButton.MouseButton1Click:Connect(togglePathfinding)
