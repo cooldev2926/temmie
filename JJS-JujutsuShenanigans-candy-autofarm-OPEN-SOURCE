@@ -58,19 +58,19 @@ local currentTarget = nil
 local currentPath = nil
 local currentWaypointIndex = 1
 
--- Function to find HalloweenDoor models with proximity prompts
+-- Function to find HalloweenDoor models with enabled proximity prompts
 local function findHalloweenDoors()
     local doors = {}
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj.Name == "HalloweenDoor" and obj:IsA("Model") then
-            local hasProximityPrompt = false
+            local enabledProximityPrompt = nil
             for _, child in pairs(obj:GetDescendants()) do
-                if child:IsA("ProximityPrompt") then
-                    hasProximityPrompt = true
+                if child:IsA("ProximityPrompt") and child.Enabled then
+                    enabledProximityPrompt = child
                     break
                 end
             end
-            if hasProximityPrompt then
+            if enabledProximityPrompt then
                 table.insert(doors, obj)
             end
         end
@@ -93,7 +93,17 @@ local function getModelPosition(model)
     return nil
 end
 
--- Function to find the nearest HalloweenDoor
+-- Function to check if a door's proximity prompt is still enabled
+local function isDoorEnabled(door)
+    for _, child in pairs(door:GetDescendants()) do
+        if child:IsA("ProximityPrompt") and child.Enabled then
+            return true
+        end
+    end
+    return false
+end
+
+-- Function to find the nearest enabled HalloweenDoor
 local function findNearestHalloweenDoor()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then
@@ -122,7 +132,7 @@ end
 -- Function to instantly interact with proximity prompt
 local function interactWithProximityPrompt(model)
     for _, child in pairs(model:GetDescendants()) do
-        if child:IsA("ProximityPrompt") then
+        if child:IsA("ProximityPrompt") and child.Enabled then
             -- Fire the proximity prompt trigger
             fireproximityprompt(child)
             break
@@ -195,8 +205,8 @@ local function followPath(waypoints)
             currentWaypointIndex = i + 1
         end
         
-        -- Check if we should stop (toggle turned off)
-        if not isToggled then
+        -- Check if we should stop (toggle turned off or target disabled)
+        if not isToggled or (currentTarget and not isDoorEnabled(currentTarget)) then
             return false
         end
     end
@@ -228,11 +238,11 @@ local function togglePathfinding()
                 return
             end
             
-            -- If we don't have a current target or the current target is done, find nearest
-            if not currentTarget then
+            -- If we don't have a current target, the current target is done, or the current target is disabled, find nearest
+            if not currentTarget or not isDoorEnabled(currentTarget) then
                 currentTarget = findNearestHalloweenDoor()
                 if not currentTarget then
-                    return -- No doors found
+                    return -- No enabled doors found
                 end
                 currentPath = computePathToTarget(currentTarget)
                 currentWaypointIndex = 1
@@ -245,7 +255,9 @@ local function togglePathfinding()
                 local distance = (rootPart.Position - targetPosition).Magnitude
                 
                 if distance <= 10 then -- Close enough to interact
-                    interactWithProximityPrompt(currentTarget)
+                    if isDoorEnabled(currentTarget) then
+                        interactWithProximityPrompt(currentTarget)
+                    end
                     currentTarget = nil
                     currentPath = nil
                     currentWaypointIndex = 1
